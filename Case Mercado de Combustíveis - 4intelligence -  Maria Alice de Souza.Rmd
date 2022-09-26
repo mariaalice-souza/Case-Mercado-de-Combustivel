@@ -1,0 +1,1575 @@
+---
+title: "Case Mercado de Combustíveis - 4intelligence"
+author: "Maria Alice de Souza"
+date: "2022-09-21"
+output: html_document
+---
+
+# Case Mercado de Combustíveis - 4intelligence
+
+## 1. Contextualização
+
+O objetivo desse exercício é compreender os dados de venda da Gasolina, Diesel e Etanol disponibilizados pela ANP. Esse dados são divulgados por estado e por ano, com frequência mensal de 12 meses. Para isso, foi utilizado o arcabouço econométrico relacionado às séries de tempo e algumas análises tangentes à participação de cada combustível nos mercados estaduais e nacionais.
+
+O primeiro passo foi a transformação dos dados em séries de tempo, tanto para o Brasil, quanto para cada Unidade Federativa que constava na base de dados.
+
+Em primeiro lugar, é necessário comentar da importância das estimações de uma série temporal e suas aplicações. Uma série de tempo é uma coleção de variáveis aleatórias ordenadas durante um período de tempo. Uma das vantagens em trabalhar com esse arcabouço é a possibilidade de fazer inferências sobre os dados e prever os acontecimentos futuros.
+
+Uma forma de visualizar e entender os dados temporais é por meio da plotagem de gráficos de linhas, o que foi feito após a criação de séries de tempo. Em todos os gráficos abaixo, pode-se notar um componente de sazonalidade e a tendência da série, representada pela linha azul.
+
+O segundo passo realizado nesse exercício foi analisar a distribuição dos três combustíveis no Brasil e nos estados federativos. O objetivo dessa análise é compreender a participação de cada combustível nas regiões e fazer inferências sobre.
+
+O Markdown está dividido da seguinte maneira: o item 2 refere-se aos pacotes utilizados ao longo do exercício; o item 3 refere-se ao carregamento das bases de dados.O item 4 é dividido em três sub-itens (Série de Tempo da Gasolina, Série de Tempo do Etanol e Série de Tempo do Diesel). Por último, o item 5 refere-se a distribuição dos combustíveis no Brasil e nas Unidades Federativas.
+
+## 2. Pacotes e diretório
+
+```{r Carregamento de Pacotes, message = FALSE, warning = FALSE}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(fabletools)
+library(ggplot2)
+library(fable)
+library(reshape2)
+library(plyr)
+library(data.table)
+library(scales)
+library(cowplot)
+library(rmarkdown)
+```
+
+```{r Diretório}
+setwd ("C:/Users/maria/OneDrive/Documents/Processo Seletivo 4inte")
+```
+
+## 3. Base de Dados
+
+```{r Base de Dados Gasolina}
+dados_gasolina =  read_excel("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx", sheet = "gasolina")
+paged_table(dados_gasolina)
+```
+
+```{r Base de Dados Etanol}
+dados_etanol = read_excel("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx", sheet = "etanol") 
+paged_table(dados_etanol)
+```
+
+```{r Base de Dados Diesel}
+dados_diesel = read_excel("dados_desafiodatascientistintern_vendas_distribuidoras_anp.xlsx", sheet = "diesel") 
+paged_table(dados_diesel)
+
+```
+
+## 4. Série Temporal da Gasolina, Diesel e Etanol
+
+Para analisarmos o mercado de combustíiveis no Brasil, precisamos visualizar o comportamento dos combustíveis ao longo do tempo, no agregado e nas Unidades Federativas. A intenção é verificar a sazonalidade e a tendência das séries temporais.
+
+### 1. *Série de Tempo da Gasolina* {.tabset .tabset-fade}
+
+Para visualizar o comportamento da Gasolina ao longo do tempo, precisamos organizar a base e, em seguida, transformar os dados em série de tempo.
+
+```{R Empilhando a base de dados}
+dados_gasolina_2 = dados_gasolina %>%
+  pivot_longer(
+    cols = `2000`: `2020`, 
+    names_to = "Ano", 
+    values_to = "Gasolina")
+paged_table(dados_gasolina_2)
+```
+
+#### Brasil
+
+Vamos filhar apenas os dados referentes ao Brasil na base empilhada de Gasolina.
+
+```{R Filtro Brasil,  message = FALSE, warning = FALSE}
+gasolina_br = filter(dados_gasolina_2, regiao == "br")
+```
+
+Transformando os dados em série de tempo. O comando class indica que a série criada é uma série temporal.
+
+```{R Série de Tempo Brasil, message = FALSE, warning = FALSE}
+
+tempo_gasolina = ts(gasolina_br[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+class (tempo_gasolina)
+
+```
+
+Para analisar o comportamento da série temporal, vamos criar um gráfico.
+
+```{R Gráfico DF Gasolina, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+fabletools::autoplot(tempo_gasolina[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Brasil entre 2003 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+   scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+ geom_line()+
+   geom_smooth(method = "loess", se = FALSE) 
+
+```
+
+Nota-se, no gráfico acima, que existe um comportamento oscilatório da venda de gasolina no Brasil entre 2000 e 2020. Verifica-se uma sucessão de 'picos e vales' significativos na venda do combustível, evidenciando um componente sazonal na série de tempo estimada. O padrão observado indica que ocorre picos na venda de gasolina nos meses próximos ao final do ano e significativa queda após o pico. Esse padrão é recorrente durante toda a série.
+
+A linha azul no gráfico indica uma tendência constante na série temporal, com uma leve tendência crescente na venda do combustível a partir de 2016.
+
+#### Distrito Federal
+
+```{R Distrito Federal Gasolina, message = FALSE, warning = FALSE }
+gasolina_df = filter(dados_gasolina_2, regiao == "df")
+tempo_gasolina_df= ts(gasolina_df[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+```{R Gráfico DF, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_gasolina_df[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Distrito Federal entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+Após filtrar apenas os dados referentes ao Distrito Federal na base de dados e criar uma série de tempo referente da região, nota-se um comportamento sazonal da venda de gasolina no Distrito Federal, bem como na série temporal do Brasil. Novamente, percebe-se picos e vales ao longo do tempo, evidenciando um padrão sazonal da variável.Desse modo, o gráfico evidencia picos de venda nos meses próximos ao final do ano, com posterior vale após.
+
+A tendência na série aparenta ser constante ao longo do tempo, com um leve crescimento nos primeiros e nos últimos anos da série.
+
+#### Goiás
+
+```{R Goias Gasolina, message = FALSE, warning = FALSE, }
+gasolina_go = filter(dados_gasolina_2, regiao == "go")
+tempo_gasolina_go = ts(gasolina_go[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+```
+
+```{R Goiás Gasolina Gráfico, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+fabletools::autoplot(tempo_gasolina_go[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina em Goiás entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+O comportamento da série de tempo da venda de gasolina no estado do Goiás se assemelha aos gráficos anteriores, evidenciando um componente sazonal na série. Os picos e vales da série são bem evidenciados no gráfico. Novamente, após um pico singificativo, há uma drástica queda da variável. Esse padrão se repete ao longo dos anos analisados.
+
+A tendência na série aparenta ser constante ao longo do tempo, com um leve crescimento nos últimos anos da série.
+
+#### Maranhão
+
+```{R Maranhão gasolina, message = FALSE, warning = FALSE}
+
+gasolina_ma = filter(dados_gasolina_2, regiao == "ma")
+tempo_gasolina_ma= ts(gasolina_ma[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+```
+
+```{R Maranhão Gasolina Gráfico, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_gasolina_ma[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Maranhão entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+A visualização da série temporal referente ao Maranhão indica um comportamento sazonal presente e significativo na série. Os picos e vales são bem definidos visualmente e, bem como nos gráficos anterioes, após um pico significativo, próximo ao final do ano, a variável apresenta um vale bem definido.
+
+A tendência na série temporal indica um padrão constante.
+
+#### Mato Grosso
+
+```{R Mato Grosso Gasolina, message = FALSE, warning = FALSE}
+gasolina_mt = filter(dados_gasolina_2, regiao == "mt")
+tempo_gasolina_mt  = ts(gasolina_mt[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+```{R Mato Grosso Gráfico Gasolina,  message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+fabletools::autoplot(tempo_gasolina_mt[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Mato Grosso entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+A visualização gráfia da série temporal para o estado do Mato Grosso indica a existência de um componente de sazonalidade presente.Há a presença de picos e vales bem definidos na série, com quedas significativas após um grande pico de venda do combusítvel, pico esse próximo ao final de um ano.
+
+A tendência indica um padrão constante, com um leve crescimento no final da série.
+
+#### Minas Gerais
+
+```{R Minas Gerais Gasolina, message = FALSE, warning = FALSE}
+gasolina_mg = filter(dados_gasolina_2, regiao == "mg")
+tempo_gasolina_mg= ts(gasolina_mg[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+```
+
+```{R Gráfico Minas Gerais Gasolina,  message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_gasolina_mg[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina em Minas Gerais entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE)
+
+```
+
+A visualização gráfica indica um componente de sazonalidade presente na série temporal. Nota-se um padrão bem denifido da venda de gasolina em Minas Gerais ao longo do tempo. Percebe-se a presença de picos e vales bem definidos, assim como a série temporal do Brasil e das outras Undiades Federativas estuada.Desse modo, nota-se que há grandes vendas do combustível nos meses finais de um ano e queda drástica desse numéro em sequência.
+
+A linha de tendência apresenta um padrão constante, com um leve crescimento nos últimos 3 anos da série.
+
+#### Pará
+
+```{R Pará Gasolina, message = FALSE, warning = FALSE}
+gasolina_pa = filter(dados_gasolina_2, regiao == "pa")
+tempo_gasolina_pa= ts(gasolina_pa[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+```{R Gráifoco Pará Gasolina,  message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_gasolina_pa[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Pará entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+Nota-se um a presença de um comportamento sazonal ao longo da série temporal. Há um padrão de picos e vales bem definidos, com quedas significativas após um grande pico de vendas. O gráfico indica que os picos nas vendas de gasolina são próximos ao final de um ano e queda significativa nos meses sequentes.
+
+A linha de tendência indica um comportamento constante ao longo dos anos, com um leve crescimento ao final da série.
+
+#### Tocantins
+
+```{R Tocantins Gasolina, message = FALSE, warning = FALSE}
+gasolina_to = filter(dados_gasolina_2, regiao == "to")
+tempo_gasolina_to= ts(gasolina_to[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+```{R Gráfico Tocantins Gasolina, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+fabletools::autoplot(tempo_gasolina_to[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina no Tocantins entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE)
+
+
+```
+
+A série temporal para o estado do Tocantins indica, também, um componente sazonal, evidenciando picos de venda de gasolina nos meses próximos ao final do ano, com queda significativa após isso.
+
+A linha de têndência indica um padrão constante ao longo do tempo, com leve crescimento nos anos finais da série.
+
+#### São Paulo
+
+```{R Gasolina São Paulo, message = FALSE, warning = FALSE }
+gasolina_sp = filter(dados_gasolina_2, regiao == "sp")
+tempo_gasolina_sp= ts(gasolina_sp[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+```{R Gráfico Gasolina São Paulo, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_gasolina_sp[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de gasolina em São Paulo entre 2000 a 2020",
+    x = "Ano",
+    y = "Gasolina (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE)
+```
+
+### 2. *Série de Tempo do Diesel* {.tabset .tabset-fade}
+
+Para analisar o comportamento do Diesel ao longo do tempo, é necessário organizar a base de dados, bem como foi feito com a Gasolina, no exercício anterior.
+
+```{R Base Empilhada Diesel, message = FALSE, warning = FALSE}
+dados_diesel_2 = dados_diesel %>%
+  pivot_longer(
+    cols = `2000`: `2020`, 
+    names_to = "Ano", 
+    values_to = "Diesel")
+paged_table(dados_diesel_2)
+```
+
+Filtrando os dados referentes ao Brasil e ás Unidades Federativas.
+
+```{R Filtrando Br e Unidades Federativas Diesel, message = FALSE, warning = FALSE }
+diesel_br = filter(dados_diesel_2, regiao == "br") # Brasil
+diesel_df = filter(dados_diesel_2, regiao == "df") # Distrito Federal
+diesel_go = filter(dados_diesel_2, regiao == "go") # Goiás
+diesel_ma = filter(dados_diesel_2, regiao == "ma") # Maranhão 
+diesel_mt = filter(dados_diesel_2, regiao == "mt") # Mato Grosso 
+diesel_mg = filter(dados_diesel_2, regiao == "mg") # Minas Gerais 
+diesel_pa = filter(dados_diesel_2, regiao == "pa") # Pará
+diesel_sp = filter(dados_diesel_2, regiao == "sp") # São Paulo
+diesel_to = filter(dados_diesel_2, regiao == "to") # Tocantins
+```
+
+Criando uma série temporal para o Brasil e Unidades Federativas, referente à venda do combustível Diesel.
+
+```{R Criando uma série temporal para o Brasil e UFs, message = FALSE, warning = FALSE }
+
+tempo_diesel = ts(diesel_br[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12) 
+
+tempo_diesel_df = ts(diesel_df[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_go = ts(diesel_go[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_ma = ts(diesel_ma[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_mt = ts(diesel_mt[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_mg = ts(diesel_mg[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_pa= ts(diesel_pa[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_sp= ts(diesel_sp[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+
+tempo_diesel_to= ts(diesel_to[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+#### Brasil
+
+No gráfico tangente à venda de Diesel no Brasil, de 2000 a 2020, nota-se um comportamento sazonal na série temporal. A visualização indica a presença de picos e vales bem definidos, com aumento das vendas de Diesel nos meses finais de um ano e posterior queda nos meses subsequentes. Esse padrão se repente durante todos os anos da série.
+
+A linha de tendência indica um padrão relativamente constante, com decrescimento a partir de 2016.
+
+```{R Gráfico Brasil Diesel, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+fabletools::autoplot(tempo_diesel[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Brasil entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+
+```
+
+#### Distrito Federal
+
+O gráfico para a venda de Diesel no Distrito Federal se diferencia, em alguns pontos, dos gráficos anteriores. A presença de um componente sazonal é verificada, porém com uma presença maior de picos e vales ao longo do tempo. As oscilações da venda de Diesel são bem definidas e apresenta um padrão evidente na série temporal. Os meses finais dos anos 2000, 2002 e 2007 apresentam as maiores quedas da venda do combustível, seguidas por aumentos significativos.
+
+A linha de tendência apresentou certo crescimento durante alguns anos da série, mas com tendência descrescente a partir de 2016.
+
+```{R Gráfico Distrito Federal Diesel, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_diesel_df[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Distrito Federal entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Goiás
+
+A série temporal do Diesel para o estado de Goiás também apresenta um componente sazonal fortemente identificado pelo gráfico. Os picos de vendas são vistos nos meses finais de um ano, seguidos de quedas significativas.
+
+Novamente, a linha de tedência apresenta sinais decrescentes nos últimos anos da série temporal.
+
+```{R Goiás Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_go[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel em Goiás entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Maranhão
+
+Novamente, a série de tempo tangente ao Maranhão apresenta fortes sinais da existência de um componente sazonal. A série apresenta picos e vales bem definidos, sendo que as maiores vendas do Diesel (picos) realizadas nos meses finais de um ano, com posterior queda nos meses sequentes. Esse padrão se repete ao longo de toda série.
+
+A linha de tendência apresenta leves sinais de crescimento, principalmente a partir de 2013.
+
+```{R Maranhão Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_ma[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Maranhão entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Mato Groso
+
+O gráfico demonstra fortemente um componente sazonal nas vendas de Diesel no estado do Mato Grosso, com picos e vales bem definidos ao longo do tempo. As maiores vendas do combustível ocorrem nos meses finais de cada ano, com queda nos meses sequintes. Esse padrão se repete durante todos os anos da série.
+
+Ao contrário dos gráficos anteiores, a linha de tendência indica um padrão visualmente decrescente a partir de 2014. Não obstante, o maior vale da série ocorreu entre 2019 e 2020.
+
+```{R Mato Grosso Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_mt[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Mato Grosso entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Minas Gerais
+
+O gráfico para o estado de Minas Gerais revela, também, um componente sazonal da série temporal relativa à venda do Diesel no estado. Ocorre um padrão bem definido ao longo do tempo, com picos e vales significativos. O aumento das vendas do combustível ocorre nos meses finais de um ano, com queda nos meses subsequentes.
+
+A linha de tendência apresenta sinais descrentes nos anos finais da série temporal.
+
+```{R Minas Gerais Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_mg[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel em Minas Gerais entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Pará
+
+O gráfico abaixo revela um componente sazonal no tocante à venda de Diesel no estado do Pará, assim como nos gráficos anteriores. Os padrões de aumento e redução da venda do combusítvel são visíveis no gráfico, evidenciando picos de venda nos meses finais de um ano, com posterior queda.
+
+A linha de tedência revela um comportamento relativamente constante, principalmente a partir de 2013.
+
+```{R Pará Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+fabletools::autoplot(tempo_diesel_pa[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Pará entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Tocantins
+
+Um componente sazonal é visto, também, nas vendas de Diesel no estado do Tocantins. Picos e vales são identificados no gráfico abaixo, evidenciando que, após um grande número de vendas do combustível, ocorre a redução da venda dos mesmos. Os picos ocorrem nos meses finais de um ano e, após isso, as vendas caiem de forma significativa.
+
+A linha de tendência apresenta sinais de crescimento nos anos iniciais da série, e se manteve constante após isso.
+
+```{R Tocantins Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_to[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel no Tocantins entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### São Paulo
+
+O gráfico abaixo revela a existência de um componente sazonal das vendas de Diesel no estado de São Paulo. Os picos e vales referentes às vendas são identificados no gráfico, evidenciando aumentos na venda nos meses finais de um ano, com posterior queda na mesma.
+
+A linha de tendência indica que houve crescimento do mercado nos primeiros 12 anos da série, com decrescimento após 2013.
+
+```{R São Paulo Diesel Gráfico,message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7 }
+
+fabletools::autoplot(tempo_diesel_sp[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de diesel em São Paulo entre 2000 a 2020",
+    x = "Ano",
+    y = "Diesel (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+### 3. *Série de Tempo do Etanol* {.tabset .tabser-fade}
+
+Bem como foi feito para a Gasolina e Diesel, o primeiro passo para analisar a série de tempo referente ao Etanol é empilhar a base de dados.
+
+```{R Base Empilhada Etanol, message = FALSE, warning = FALSE}
+dados_etanol_2 = dados_etanol %>%
+  pivot_longer(
+    cols = `2000`: `2020`, 
+    names_to = "Ano", 
+    values_to = "Etanol")
+paged_table(dados_diesel_2)
+```
+
+O segundo passo consiste em filtrar os dados referentes ao Brasil e às Unidades Federativas.
+
+```{R Filtrando Brasil e Unidades Federativas Diesel, message = FALSE, warning = FALSE }
+etanol_br = filter(dados_etanol_2, regiao == "br") # Brasil
+etanol_df = filter(dados_etanol_2, regiao == "df") # Distrito Federal
+etanol_go = filter(dados_etanol_2, regiao == "go") # Goiás
+etanol_ma = filter(dados_etanol_2, regiao == "ma") # Maranhão 
+etanol_mt = filter(dados_etanol_2, regiao == "mt") # Mato Grosso 
+etanol_mg = filter(dados_etanol_2, regiao == "mg") # Minas Gerais 
+etanol_pa = filter(dados_etanol_2, regiao == "pa") # Pará
+etanol_sp = filter(dados_etanol_2, regiao == "sp") # São Paulo
+etanol_to = filter(dados_etanol_2, regiao == "to") # Tocantins
+```
+
+Por último, é necessáro criar uma série temporal para o Brasil e Unidades Federativas, referente à venda do combustível Etanol.
+
+```{R Série Temporal Etanol}
+tempo_etanol = ts(etanol_br[,2:4], start = c(2000, 1), end = c(2020,12), frequency = 12)
+tempo_etanol_df= ts(etanol_df[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_go = ts(etanol_go[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_ma= ts(etanol_ma[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_mt  = ts(etanol_mt[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_mg= ts(etanol_mg[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_pa= ts(etanol_pa[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_sp= ts(etanol_sp[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+tempo_etanol_to= ts(etanol_to[,2:4], start = c(2000,1), end = c(2020,12), frequency = 12)
+```
+
+#### Brasil
+
+O gráfico abaixo indica que a série temporal referente à venda do Etanol no Brasil apresenta um componente sazonal.A série temporal apresenta picos e vales definidos e após os maiores picos de vendas, ocorrem as maiores reduções das vendas de Etanol.
+
+A linha de tendência indica sinais relativamente crescentes nos últimos anos da série
+
+```{R Gráfico Brasil Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Brasil entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Distrito Federal
+
+O gráfico da série temporal tangente ao Etanol para o Distrito Federal indica a presença de um componente sazonal. Existem meses que ocorrem as maiores vendas do combustível e, também, meses que essas vendas se reduzem de forma significativa. Os picos ocorrem nos meses finais de cada ano e são seguidos pela redução nas vendas do combustível.
+
+A linha de tendência indica um padrão constante ao longo do tempo.
+
+```{R Gráfico Distrito Federal Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+fabletools::autoplot(tempo_etanol_df[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Distrito Federal entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Goiás
+
+O gráfico abaixo indica a presença de um componente sazonal na série de tempo referente à venda de Etanol em Goiás. Existem períodos, ao longo de um ano, que ocorrem maiores vendas do combustível. Esse padrão se repete em todos os anos da série. Da mesma forma, existem meses em que as vendas do combustível caiem drasticamente.
+
+A linha de tendência indica um padrão de crescimento nos últimos 3 anos da série.
+
+```{R Gráfico Goiás Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_go[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol em Goiás entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE)
+```
+
+#### Maranhão
+
+No tocante às vendas de Etanol no Maranhão, o gráfico indica a presença, também, de um componente sazonal. De modo similar aos outros gráficos, existem meses que ocorrem maiores vendas do combustível. Esse padrão se repete em todos os anos da série. Da mesma forma, existem meses em que as vendas do combustível caiem drasticamente.
+
+A linha de tendência indica um padrão constante das vendas ao longo dos anos.
+
+```{R Gráfico Maranhão Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_ma[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Maranhão entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Mato Grosso
+
+Similar aos exercícios anteiores, a série temporal da venda de Etanol no Matro Grosso apresenta um componente sazonal. Ocorre o aumento das vendas do combustível em alguns meses de um ano. Esse aumento sazonal se repete ao longo dos anos da série. Da mesma forma, existem meses em que as vendas do combustível caiem drasticamente.
+
+```{R Gráfico Mato Grosso Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_mt[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Mato Grosso entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Minas Gerais
+
+O componente sazonal também é identificado nas vendas do Etanol em Minas Gerais. Existem meses em que ocorrem as maiores vendas do combustível, bem como existem meses que essas vendas caiem significadamente. Esse padrão se repete durante todos os anos da série de tempo.
+
+A linha de tendência indica sinais crescente nos anos finais da série.
+
+```{R Gráfico Minas Gerais Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_mg[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol em Minas Gerais entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### Pará
+
+O gráfico abaixo indica a presença de um componente sazonal nas vendas de Etanol ao longo do tempo no Pará. Os picos e vales das vendas ocorrem de forma recorrente ao longo de um ano e se repete. Nota-se que existem meses com maiores vendas, assim como existem meses que essas vendas caiem de forma significativa.
+
+A linha de tendência sugere um padrão constante, com leve crescimento a partir de 2013.
+
+```{R Gráfico Pará Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_pa[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Pará entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE)
+```
+
+#### Tocantins
+
+O gráfico abaixo indica a presença de um componente sazonal na série de tempo referente à venda do Etanol no Tocantins. Isso implica dizer que, em determinados meses de um ano, ocorrem maiores vendas do combusível, ao passo que, em certos meses, ocorrem a diminuição das vendas.Esse padrão se repete ao longo do tempo.
+
+A linha de tendência sugere um leve crescimento entre 2009 e 2013, mantendo um padrão constante.
+
+```{R Gráfico TO Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_to[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol no Tocantins entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+#### São Paulo
+
+Novamente, um componente sazonal é verificado na série de tempo relativa à venda de Etanol em São Paulo. Há períodos no tempo em que há aumentos da venda do combustível, da mesma forma que há períodos em que ha diminuição. Predomina-se picos e vales ao longo de toda série.
+
+A linha de tendência sugere um padrão constante com leve crescimento nos anos finais da série.
+
+```{R Gráfico SP Etanol, message = FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+fabletools::autoplot(tempo_etanol_sp[,3])+
+  ggplot2::labs (
+    title = "Comportamento da venda de etanol em São Paulo entre 2000 a 2020",
+    x = "Ano",
+    y = "Etanol (metros cúbicos)", 
+    caption = "Dados: ANP | Elaboração Prórpia") + 
+  scale_x_continuous(breaks = seq(2000,2020,1))+
+  theme_classic()+ 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.caption = element_text(size = 10L))+
+  geom_line()+
+  geom_smooth(method = "loess", se = FALSE) 
+```
+
+## 5. Distribuição dos combustíveis no Brasil e nas Unidades Federativas {.tabset .tabset-fade}
+
+O último exercício consiste em analisar a distribuição dos combustíveis no Brasil e nas Unidades Federativas. Esse exercício é útil para analisar quanto de cada combustível cada Estado/Brasil utiliza, se há predominância de um tipo de combustível sobre o outro e etc.
+
+Para isso, é necessário criar um objeto que filtre os dados do Brasil e das Unidades Federativas na base de dados original (base em que não ocorreu o empilhaento dos dados) e, a partir disso, somar a quantidade total de vendas de um ano.
+
+```{R Filtros, FALSE, warning = FALSE}
+
+# Brasil
+gasolina_br = filter(dados_gasolina, regiao == "br") 
+etanol_br = filter(dados_etanol, regiao == "br")
+diesel_br = filter(dados_diesel, regiao == "br")
+
+# Distrito Federal 
+
+gasolina_df = filter(dados_gasolina, regiao == "df")
+etanol_df = filter(dados_etanol, regiao == "df")
+diesel_df = filter(dados_diesel, regiao == "df")
+
+# Goiás 
+
+gasolina_go = filter(dados_gasolina, regiao == "go")
+etanol_go = filter(dados_etanol, regiao == "go")
+diesel_go = filter(dados_diesel, regiao == "go")
+
+# Maranhão 
+
+gasolina_ma = filter(dados_gasolina, regiao == "ma")
+etanol_ma = filter(dados_etanol, regiao == "ma")
+diesel_ma= filter(dados_diesel, regiao == "ma")
+
+# Mato Grosso 
+
+gasolina_mt = filter(dados_gasolina, regiao == "mt")
+etanol_mt = filter(dados_etanol, regiao == "mt")
+diesel_mt= filter(dados_diesel, regiao == "mt")
+
+# Minas Gerais 
+
+gasolina_mg = filter(dados_gasolina, regiao == "mg")
+etanol_mg = filter(dados_etanol, regiao == "mg")
+diesel_mg= filter(dados_diesel, regiao == "mg")
+
+# Pará 
+
+gasolina_pa = filter(dados_gasolina, regiao == "pa")
+etanol_pa = filter(dados_etanol, regiao == "pa")
+diesel_pa= filter(dados_diesel, regiao == "pa")
+
+# Tocantins 
+
+gasolina_to = filter(dados_gasolina, regiao == "to")
+etanol_to= filter(dados_etanol, regiao == "to")
+diesel_to= filter(dados_diesel, regiao == "to")
+
+# São Paulo 
+gasolina_sp = filter(dados_gasolina, regiao == "sp")
+etanol_sp= filter(dados_etanol, regiao == "sp")
+diesel_sp= filter(dados_diesel, regiao == "sp")
+```
+
+Com os filtros aplicados, somou-se as vendas de cada combustível, por ano. A intenção é analisar a venda total por ano, de cada combustível, por meio de um gráfico de barras empilhadas. Dessa forma, o objetivo é analisar a distribuição de combustíveis de cada Unidade Federativa/Brasil por ano. Sendo assim, é necessário que as bases de dados tenham uma variável categória. O comando abaixo refere-se ao total de vendas de cada combustível por ano.
+
+```{R Soma de cada Combustível, FALSE, warning = FALSE }
+#                       Gasolina 
+# Brasil
+br_gasolina = data.frame(colSums(gasolina_br[,3:23]), "Gasolina")
+colnames(br_gasolina)[1] = "Valor"
+colnames(br_gasolina)[2] = "Tipo"
+setDT(br_gasolina, keep.rownames = "Ano")
+# Distrito Federal
+df_gasolina = data.frame(colSums(gasolina_df[,3:23]), "Gasolina")
+colnames(df_gasolina)[1] = "Valor"
+colnames(df_gasolina)[2] = "Tipo"
+setDT(df_gasolina, keep.rownames = "Ano")
+# Goiás 
+go_gasolina = data.frame(colSums(gasolina_go[,3:23]), "Gasolina")
+colnames(go_gasolina)[1] = "Valor"
+colnames(go_gasolina)[2] = "Tipo"
+setDT(go_gasolina, keep.rownames = "Ano")
+# Maranhão 
+ma_gasolina = data.frame(colSums(gasolina_ma[,3:23]), "Gasolina")
+colnames(ma_gasolina)[1] = "Valor"
+colnames(ma_gasolina)[2] = "Tipo"
+setDT(ma_gasolina, keep.rownames = "Ano")
+# Mato Grosso 
+mt_gasolina = data.frame(colSums(gasolina_mt[,3:23]), "Gasolina")
+colnames(mt_gasolina)[1] = "Valor"
+colnames(mt_gasolina)[2] = "Tipo"
+setDT(mt_gasolina, keep.rownames = "Ano")
+# Minas Gerais 
+mg_gasolina = data.frame(colSums(gasolina_mg[,3:23]), "Gasolina")
+colnames(mg_gasolina)[1] = "Valor"
+colnames(mg_gasolina)[2] = "Tipo"
+setDT(mg_gasolina, keep.rownames = "Ano")
+# Pará 
+pa_gasolina = data.frame(colSums(gasolina_pa[,3:23]), "Gasolina")
+colnames(pa_gasolina)[1] = "Valor"
+colnames(pa_gasolina)[2] = "Tipo"
+setDT(pa_gasolina, keep.rownames = "Ano")
+# Tocantins 
+to_gasolina = data.frame(colSums(gasolina_to [,3:23]), "Gasolina")
+colnames(to_gasolina)[1] = "Valor"
+colnames(to_gasolina)[2] = "Tipo"
+setDT(to_gasolina, keep.rownames = "Ano")
+# São Paulo 
+sp_gasolina = data.frame(colSums(gasolina_sp[,3:23]), "Gasolina")
+colnames(sp_gasolina)[1] = "Valor"
+colnames(sp_gasolina)[2] = "Tipo"
+setDT(sp_gasolina, keep.rownames = "Ano")
+
+```
+
+```{R Soma ETANOL, FALSE, warning = FALSE }
+#                            Etanol 
+# Brasil 
+br_etanol = data.frame(colSums(etanol_br[,3:23]), "Etanol")
+colnames(br_etanol)[1] = "Valor"
+colnames(br_etanol)[2] = "Tipo"
+setDT(br_etanol, keep.rownames = "Ano")
+# Distrito Federal 
+df_etanol = data.frame(colSums(etanol_df[,3:23]), "Etanol")
+colnames(df_etanol)[1] = "Valor"
+colnames(df_etanol)[2] = "Tipo"
+setDT(df_etanol, keep.rownames = "Ano")
+# Goiás 
+go_etanol = data.frame(colSums(etanol_go[,3:23]), "Etanol")
+colnames(go_etanol)[1] = "Valor"
+colnames(go_etanol)[2] = "Tipo"
+setDT(go_etanol, keep.rownames = "Ano")
+# Maranhão 
+ma_etanol = data.frame(colSums(etanol_ma[,3:23]), "Etanol")
+colnames(ma_etanol)[1] = "Valor"
+colnames(ma_etanol)[2] = "Tipo"
+setDT(ma_etanol, keep.rownames = "Ano")
+# Mato Grosso 
+mt_etanol = data.frame(colSums(etanol_mt[,3:23]), "Etanol")
+colnames(mt_etanol)[1] = "Valor"
+colnames(mt_etanol)[2] = "Tipo"
+setDT(mt_etanol, keep.rownames = "Ano")
+# Minas Gerais 
+mg_etanol = data.frame(colSums(etanol_mg[,3:23]), "Etanol")
+colnames(mg_etanol)[1] = "Valor"
+colnames(mg_etanol)[2] = "Tipo"
+setDT(mg_etanol, keep.rownames = "Ano")
+# Pará 
+pa_etanol = data.frame(colSums(etanol_pa[,3:23]), "Etanol")
+colnames(pa_etanol)[1] = "Valor"
+colnames(pa_etanol)[2] = "Tipo"
+setDT(pa_etanol, keep.rownames = "Ano")
+# Tocantins 
+to_etanol = data.frame(colSums(etanol_to[,3:23]), "Etanol")
+colnames(to_etanol)[1] = "Valor"
+colnames(to_etanol)[2] = "Tipo"
+setDT(to_etanol, keep.rownames = "Ano")
+# São Paulo 
+sp_etanol = data.frame(colSums(etanol_sp[,3:23]), "Etanol")
+colnames(sp_etanol)[1] = "Valor"
+colnames(sp_etanol)[2] = "Tipo"
+setDT(sp_etanol, keep.rownames = "Ano")
+```
+
+```{R Soma Diesel, FALSE, warning = FALSE }
+#                           DIESEL 
+# Brasil
+br_diesel = data.frame(colSums(diesel_br[,3:23]), "Diesel")
+colnames(br_diesel)[1] = "Valor"
+colnames(br_diesel)[2] = "Tipo"
+setDT(br_diesel, keep.rownames = "Ano")
+# Distrito Federal 
+df_diesel = data.frame(colSums(diesel_df[,3:23]), "Diesel")
+colnames(df_diesel)[1] = "Valor"
+colnames(df_diesel)[2] = "Tipo"
+setDT(df_diesel, keep.rownames = "Ano")
+# Goiás 
+go_diesel = data.frame(colSums(diesel_go[,3:23]), "Diesel")
+colnames(go_diesel)[1] = "Valor"
+colnames(go_diesel)[2] = "Tipo"
+setDT(go_diesel, keep.rownames = "Ano")
+# Maranhão 
+ma_diesel = data.frame(colSums(diesel_ma[,3:23]), "Diesel")
+colnames(ma_diesel)[1] = "Valor"
+colnames(ma_diesel)[2] = "Tipo"
+setDT(ma_diesel, keep.rownames = "Ano")
+# Mato Grosso 
+mt_diesel = data.frame(colSums(diesel_mt[,3:23]), "Diesel")
+colnames(mt_diesel)[1] = "Valor"
+colnames(mt_diesel)[2] = "Tipo"
+setDT(mt_diesel, keep.rownames = "Ano")
+# Minas Gerais
+mg_diesel = data.frame(colSums(diesel_mg[,3:23]), "Diesel")
+colnames(mg_diesel)[1] = "Valor"
+colnames(mg_diesel)[2] = "Tipo"
+setDT(mg_diesel, keep.rownames = "Ano")
+# Pará 
+pa_diesel = data.frame(colSums(diesel_pa[,3:23]), "Diesel")
+colnames(pa_diesel)[1] = "Valor"
+colnames(pa_diesel)[2] = "Tipo"
+setDT(pa_diesel, keep.rownames = "Ano")
+# Tocantins 
+to_diesel = data.frame(colSums(diesel_to[,3:23]), "Diesel")
+colnames(to_diesel)[1] = "Valor"
+colnames(to_diesel)[2] = "Tipo"
+setDT(to_diesel, keep.rownames = "Ano")
+# são Paulo 
+sp_diesel = data.frame(colSums(diesel_sp[,3:23]), "Diesel")
+colnames(sp_diesel)[1] = "Valor"
+colnames(sp_diesel)[2] = "Tipo"
+setDT(sp_diesel, keep.rownames = "Ano")
+```
+
+Após criação dos objetos e inclusão de uma variável categória, para rerenciar o tipo de combustível e seu total de vendas, é necessário juntar as bases de dados.
+
+```{R Juntando as bases de dados, FALSE, warning = FALSE}
+# Brasil
+combustivel_br = bind_rows(br_diesel, br_etanol, br_gasolina) 
+# Distrito Federal 
+combustivel_df = bind_rows(df_diesel, df_etanol, df_gasolina)
+# Goiás 
+combustivel_go = bind_rows(go_diesel, go_etanol, go_gasolina)
+# Maranhão 
+combustivel_ma = bind_rows(ma_diesel, ma_etanol, ma_gasolina)
+# Mato Grosso
+combustivel_mt = bind_rows(mt_diesel, mt_etanol, mt_gasolina)
+# Minas Gerais 
+combustivel_mg = bind_rows(mg_diesel, mg_etanol, mg_gasolina)
+# Pará
+combustivel_pa = bind_rows(pa_diesel, pa_etanol, pa_gasolina)
+# Tocantins 
+combustivel_to = bind_rows(to_diesel, to_etanol, to_gasolina)
+# São Paulo 
+combustivel_sp = bind_rows(sp_diesel, sp_etanol, sp_gasolina)
+
+```
+
+### Brasil
+
+Os gráficos demonstram a distribuição do total de vendas por combustível no Brasil. Enquanto o primeiro gráfico apresenta os valores absolutos, o segundo gráfico apresenta os valores em termos relativos. Nota-se que há uma predominância do combustível Diesel no país. O segundo combustível mais vendido no país é a Gasolina e, por último, o Etanol.
+
+O fato do Diesel ser o mais vendido no país pode ser explicado pela estrutura de transportes vigente no país. O transporte rodoviário é o mais utilizado no Brasil, seja para transporte de alimentos, passageiros, cargas ou itens para a indústria. Nesse sentido, o diesel (o combustível dos caminhões, ônibus e veículos capazes de transportar cargas) é o maior demandado dentre os três tipos de combustíveis.
+
+Um ponto interesse que deve ser levado em consideração é o aumento da participação do Etanol em 2009, registrando a maior participação do combustível durante a série. De acordo com dados do G1, o consumo de Etanol subiu cerca de 16% nesse ano, o que ajudou a formar uma matriz energética mais limpa no país e estabilizar o preço dos combustíveis.
+
+```{R Gráficos Brasil, FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_br) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Brasil",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_br) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Brasil",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+```
+
+### Distrito Federal
+
+O padrão de distribuição de combustíveis no Distrito Federal diferencia-se do padrão observado no Brasil. É possível notar, com os gráficos abaixo, que o combustível mais utilizado no Distrito Federal é a gasolina. Em todos os anos da série, a gasolina é a mais distribuída.
+
+Para essa análise, deve-se considerar que a estrutura do Distrito Federal é diferente das demais Unidades Federativas do Brasil: o Distrito possui apenas um município, Brasília, a capital do país, cuja sede do Governo está localizada. O Congresso Nacional, Palácio do Planalto, Banco Central, dentre outros, são localizados em Brasília. Desse modo, pode-se considerar que há uma demanda por carros de pequeno porte, cujo abastecimento pode ser feito por gasolina ou etanol.
+
+```{R Gráficos DF , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_df) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Distrito Federal ",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_df) + # 100% 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Distrito Federal",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Goiás
+
+Diferentemente do Distrito Federal, Goiás possui o Diesel como principal combustível distribuído, bem como o Brasil como um todo. Novamente, o modal brasileiro, com predominância rodoviária, pode justificar esse resultado.
+
+Um ponto interesse dessa distribuição é o aumento da participação do Etanol, principalmente a partir de 2018, ano cujo preço do etanol estava abaixo do preço da gasolina.
+
+```{R Gráficos GO , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+
+ggplot(combustivel_go) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Goiás ",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_go) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Goiás",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Maranhão
+
+A distribuição dos combustíveis do Maranhão segue, em partes, a lógica da distribuição no Brasil agregado, cuja maior participação é do Diesel. A diferença é a menor participação do Etanol na distribuição total. O segundo combustível mais consumido nesse estado é a Gasolina, mesmo em 2009 e 2018, anos em que a participação do Etanol aumentou em outros estados.
+
+```{R Gráficos MA , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_ma) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Maranhão ",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_ma) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Maranhão",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Mato Grosso
+
+No estado Mato Grosso, o Diesel possui a maior participação, atingindo pelo menos 60% do total em todos os anos da série. É importante ressaltar que Mato Grosso é o maior produtor do Brasil e lidera a produção de soja, milho, além de possuir o maior rebanho do país. A malha rodoviária, e o Diesel, são muito utilizados na manuntenção da Agropecuária, seja para transporte de cargas ou como combustível para os veículos que operam no Agro.
+
+```{R Gráficos mato grosso , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_mt) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Mato Grosso",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_mt) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Mato Grosso",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Minas Gerais
+
+Seguindo a lógica nacional, o Diesel possui a maior participação no total dos combustíveis vendidos em Minas Gerais. Novamente, a grande utilização da malha rodoviária no país pode ser uma justificativa para a maior participação do Diesel.
+
+Além disso, nota-se um aumento da participação do Etanol no estado em 2009, 2015, 2018, 2019 e 2020.
+
+```{R Gráficos mg , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_mg) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Minas Gerais",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_mg) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Minas Gerais",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Pará
+
+A distribuição dos combustíveis no Pará se assemelha com a distribuição vista no Mato Grosso. A maior participação é do Diesel, seguida pela Gasolina. A pequena participação do Etanol também é vista, mesmo nos anos em que houve maior participação desse combustível em outros estados.
+
+```{R Gráficos PA , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_pa) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Pará",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_pa) + # 100% 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Pará",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### Tocantins
+
+De forma similar ao Mato Grosso e Pará, o Diesel possui a maior participação no Tocantins.O combustível ocupa, pelo menos, 60% do total em todos os anos da série. A Gasolina é o segundo combustível com maior participação, seguido pelo Etanol.
+
+```{R Gráficos TO , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_to) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Tocantins",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_to) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "Tocantins",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+### São Paulo
+
+Diferentemente de todos os gráficos, São Paulo é o estado com maior diversificação em termos da distribuição dos três combustíveis. A partir de 2004, a participação do Etanol aumentou no estado, ultrapassando as vendas da Gasolina em alguns anos. São Paulo é o estado que mais produz e consome Etanol no Brasil, o que corrobora com os gráficos apresentados.
+
+```{R Gráficos SP , FALSE, warning = FALSE, fig.width = 13, fig.height = 7}
+ggplot(combustivel_sp) +
+  aes(x = Ano, y = Valor, fill = Tipo) +
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "São Paulo",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+
+ggplot(combustivel_sp) + 
+  aes(x = Ano, fill = Tipo, weight = Valor) +
+  geom_bar(position = "fill") +
+  scale_fill_hue(direction = 1) +
+  labs( 
+    y = "Valor de vendas / metros cúbicos",
+    title = "Distribuição dos total de vendas por tipo de combustível ",
+    subtitle = "São Paulo",
+    caption = "Dados: ANP | Elaboração Própria "
+  ) +
+  theme_minimal() + 
+  theme(
+    plot.title = element_text(size = 14L,
+                              face = "bold",
+                              hjust = 0.5),
+    plot.subtitle = element_text(size = 12L,
+                                 face = "italic",
+                                 hjust = 0.5),
+    plot.caption = element_text(size = 10L)
+  )
+```
+
+# Referências
+
+-   [São Paulo é o que mais produz e consome Etanol](https://www.novacana.com/n/etanol/mercado/consumo-hidratado-1-semestre-2022-7-77-bi-litros-queda-anual-15-7-010822#:~:text=Em%20S%C3%A3o%20Paulo%2C%20estado%20que,3%2C82%20bilh%C3%B5es%20de%20litros.)
+
+-   [Os 5 estados mais 'Agro do Brasil](https://www.bloomberglinea.com.br/2021/11/17/quais-sao-os-5-estados-mais-agro-do-brasil)
